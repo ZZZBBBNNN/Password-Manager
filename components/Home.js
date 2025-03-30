@@ -9,6 +9,9 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedView } from "./Themed";
+import axios from 'axios';
+
+
 
 export default function Home() {
   const [searchText, setSearchText] = useState("");
@@ -30,13 +33,19 @@ export default function Home() {
 
   const loadPasswords = async () => {
     try {
-      const storedPasswords = await AsyncStorage.getItem("passwords");
-      if (storedPasswords) {
-        setPasswords(JSON.parse(storedPasswords));
-      }
+      const response = await axios.get('http://localhost:3000?Name=AAA');
+      console.log(response);
     } catch (error) {
-      console.error("Error loading passwords:", error);
+      Alert.alert("Error", error.message);
     }
+    // try {
+    //   const storedPasswords = await AsyncStorage.getItem("passwords");
+    //   if (storedPasswords) {
+    //     setPasswords(JSON.parse(storedPasswords));
+    //   }
+    // } catch (error) {
+    //   console.error("Error loading passwords:", error);
+    // }
   };
 
   const savePasswords = async (updatedPasswords) => {
