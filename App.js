@@ -8,6 +8,7 @@ import { useLoadedAssets } from "./hooks/useLoadedAssets";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import Authentication from "./components/Authentication";
+import Login from "./components/Login";
 import BottomTabNavigator from "./navigation/BottomTabNavigator";
 
 const Stack = createStackNavigator();
@@ -23,7 +24,8 @@ export default function App() {
       <ThemeProvider theme={colorScheme}>
         <SafeAreaProvider>
           <NavigationContainer>
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="Login" component={Login} />
               <Stack.Screen name="Authentication" component={Authentication} />
               <Stack.Screen name="Main" component={BottomTabNavigator} />
             </Stack.Navigator>

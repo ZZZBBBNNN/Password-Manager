@@ -6,9 +6,12 @@ import {
   FlatList,
   TouchableOpacity,
   Text,
+  ActivityIndicator,
+  Alert
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedView } from "./Themed";
+import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 
 
@@ -22,59 +25,129 @@ export default function Home() {
   const [showPasswords, setShowPasswords] = useState({});
   const [editingPassword, setEditingPassword] = useState({});
   const [editingUsername, setEditingUsername] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const navigation = useNavigation();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    checkAuth();
     loadPasswords();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        navigation.replace('Login');
+      }
+    } catch (error) {
+      console.error('认证检查失败:', error);
+      Alert.alert('错误', '认证检查失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   function generateStrongPassword() {
     return Math.random().toString(36).slice(-10);
   }
 
+  // const loadPasswords = async () => {
+  //   try {
+  //     const response = await axios.get('http://localhost:3000?Name=AAA');
+  //     console.log(response.data.message);
+  //   } catch (error) {
+  //     Alert.alert("Error", error.message);
+  //   }
+  //   // try {
+  //   //   const storedPasswords = await AsyncStorage.getItem("passwords");
+  //   //   if (storedPasswords) {
+  //   //     setPasswords(JSON.parse(storedPasswords));
+  //   //   }
+  //   // } catch (error) {
+  //   //   console.error("Error loading passwords:", error);
+  //   // }
+  // };
   const loadPasswords = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await axios.get('http://localhost:3000?Name=AAA');
-      console.log(response);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('未登录');
+      }
+      
+      const response = await axios.get('http://localhost:3000/passwords', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setPasswords(response.data);
+    } catch (error) {
+      setError(error.message);
+      Alert.alert("错误", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveEditedPassword = async (id) => {
+    try {
+      const response = await axios.put(`http://localhost:3000/passwords/${id}`, {
+        username: editingUsername[id],
+        password: editingPassword[id]
+      }, {
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+        }
+      });
+      
+      const updatedPasswords = passwords.map(item =>
+        item.id === id ? response.data : item
+      );
+      setPasswords(updatedPasswords);
+      setEditingUsername({});
+      setEditingPassword({});
     } catch (error) {
       Alert.alert("Error", error.message);
     }
-    // try {
-    //   const storedPasswords = await AsyncStorage.getItem("passwords");
-    //   if (storedPasswords) {
-    //     setPasswords(JSON.parse(storedPasswords));
-    //   }
-    // } catch (error) {
-    //   console.error("Error loading passwords:", error);
-    // }
   };
 
-  const savePasswords = async (updatedPasswords) => {
-    try {
-      await AsyncStorage.setItem("passwords", JSON.stringify(updatedPasswords));
-      setPasswords(updatedPasswords);
-    } catch (error) {
-      console.error("Error saving passwords:", error);
-    }
-  };
-
-  const addPassword = () => {
+  const addPassword = async () => {
     if (newAppName && newUsername && newPassword) {
-      const newId = Date.now().toString();
-      const updatedPasswords = [
-        ...passwords,
-        { id: newId, appName: newAppName, username: newUsername, password: newPassword },
-      ];
-      savePasswords(updatedPasswords);
-      setShowPasswords((prev) => ({ ...prev, [newId]: false }));
-      setNewAppName("");
-      setNewUsername("");
-      setNewPassword(generateStrongPassword());
+      try {
+        const response = await axios.post('http://localhost:3000/passwords', {
+          appName: newAppName,
+          username: newUsername,
+          password: newPassword
+        }, {
+          headers: {
+            'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+          }
+        });
+        
+        setPasswords([...passwords, response.data]);
+        setNewAppName("");
+        setNewUsername("");
+        setNewPassword(generateStrongPassword());
+      } catch (error) {
+        Alert.alert("Error", error.message);
+      }
     }
   };
 
-  const deletePassword = (id) => {
-    const updatedPasswords = passwords.filter((item) => item.id !== id);
-    savePasswords(updatedPasswords);
+  const deletePassword = async (id) => {
+    try {
+      await axios.delete(`http://localhost:3000/passwords/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+        }
+      });
+      setPasswords(passwords.filter(item => item.id !== id));
+    } catch (error) {
+      Alert.alert("Error", error.message);
+    }
   };
 
   const togglePasswordVisibility = (id) => {
@@ -86,24 +159,24 @@ export default function Home() {
     setEditingPassword((prev) => ({ ...prev, [id]: currentPassword }));
   };
 
-  const saveEditedPassword = (id) => {
-    const updatedPasswords = passwords.map((item) =>
-      item.id === id
-        ? { ...item, username: editingUsername[id], password: editingPassword[id] }
-        : item
-    );
-    savePasswords(updatedPasswords);
-    setEditingUsername((prev) => {
-      const updated = { ...prev };
-      delete updated[id];
-      return updated;
-    });
-    setEditingPassword((prev) => {
-      const updated = { ...prev };
-      delete updated[id];
-      return updated;
-    });
-  };
+  // const saveEditedPassword = (id) => {
+  //   const updatedPasswords = passwords.map((item) =>
+  //     item.id === id
+  //       ? { ...item, username: editingUsername[id], password: editingPassword[id] }
+  //       : item
+  //   );
+  //   savePasswords(updatedPasswords);
+  //   setEditingUsername((prev) => {
+  //     const updated = { ...prev };
+  //     delete updated[id];
+  //     return updated;
+  //   });
+  //   setEditingPassword((prev) => {
+  //     const updated = { ...prev };
+  //     delete updated[id];
+  //     return updated;
+  //   });
+  // };
 
   const renderItem = ({ item }) => (
     <View style={styles.passwordItem}>
@@ -165,9 +238,10 @@ export default function Home() {
       </View>
     </View>
   );
-
   return (
     <ThemedView style={styles.container}>
+      {loading && <ActivityIndicator size="large" color="#0000ff" />}
+      {error && <Text style={styles.errorText}>{error}</Text>}
       <TextInput
         style={styles.searchBar}
         placeholder="Search for app/website"
@@ -205,6 +279,7 @@ export default function Home() {
         style={{ marginTop: 20 }}
       />
     </ThemedView>
+ 
   );
 }
 
@@ -228,7 +303,12 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#fff",
   },
-  card: { padding: 15, backgroundColor: "#fff", borderRadius: 8 },
+  errorText: {
+    color: 'red',
+    textAlign: 'center',
+    marginVertical: 10
+  },
+  card: { padding: 15, backgroundColor: "#fff", borderRadius: 8 , boxShadow: '0 2px 4px rgba(0,0,0,0.1)'},
   appName: { fontWeight: "bold", fontSize: 16, marginBottom: 5 },
   username: { fontSize: 14, marginBottom: 5 },
   actions: { marginTop: 10, flexDirection: "row", justifyContent: "space-between" },

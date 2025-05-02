@@ -6,6 +6,7 @@ import {
   Button,
   Alert,
   Platform,
+  TouchableOpacity,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker"; // RNCPicker
 import * as Notifications from "expo-notifications";
@@ -13,8 +14,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedView } from "../components/Themed";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import moment from "moment";
+import { useNavigation } from '@react-navigation/native';  // 改回使用 React Navigation
+
 
 export default function Settings() {
+  const navigation = useNavigation();
   const [passwords, setPasswords] = useState([]);
   const [selectedPassword, setSelectedPassword] = useState(""); // SelectedPassword
   const [reminderDate, setReminderDate] = useState(new Date());
@@ -42,6 +46,15 @@ export default function Settings() {
       setSelectedPassword(passwords[0].appName); // pick the first password
     }
   }, [passwords]);
+  //设置登出
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      navigation.replace('Login');
+    } catch (error) {
+      Alert.alert('错误', '登出失败');
+    }
+  };
 
   // Set notifications
   const scheduleNotification = async () => {
@@ -159,12 +172,33 @@ export default function Settings() {
 
       {/* Set reminder button */}
       <Button title="Set Reminder" onPress={scheduleNotification} />
+      {/* <Button title="Logout" onPress={handleLogout} /> */}
+      <TouchableOpacity 
+        style={styles.logoutButton} 
+        onPress={handleLogout}
+      >
+        <Text style={styles.logoutButtonText}>登出</Text>
+      </TouchableOpacity>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#F4F6F9" },
+  
+  logoutButton: {
+    backgroundColor: '#FF3B30',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
   row: {
     flexDirection: "row",
     alignItems: "center", // Make sure the text and selection box are vertically centered

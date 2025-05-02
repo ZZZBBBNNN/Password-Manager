@@ -1,49 +1,52 @@
-const express = require('express');
-const mysql = require('mysql2/promise');
-const bodyParser = require('body-parser');
-const cors = require('cors');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { sequelize } from './models/database.js';
+import authRoutes from './routes/auth.js';
+import passwordRoutes from './routes/passwords.js';
+
+dotenv.config();
 
 const app = express();
+
+// 中间件
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-const db = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'your_password',
-  database: 'test_db',
+// 健康检查端点
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
 });
 
-// 接收前端 GET 请求
-app.get('/', async (req, res) => {
-  const name = req.query.Name; // 获取查询参数
-  if (!name) {
-    return res.status(400).send("Name 参数缺失");
-  }
+// 路由
+app.use('/auth', authRoutes);
+app.use('/passwords', passwordRoutes);
 
+// 错误处理中间件
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: '服务器内部错误' });
+});
+
+const PORT = process.env.PORT || 3000;
+
+// 启动服务器
+const startServer = async () => {
   try {
-    await db.query("INSERT INTO names (name) VALUES (?)", [name]);
-    res.send({ message: "Name successfully stored!", name });
-  } catch (err) {
-    res.status(500).send({ error: err.message });
-  }
-});
+    await sequelize.authenticate();
+    console.log('数据库连接成功');
 
-// 创建数据库和表
-app.get('/init', async (req, res) => {
-  try {
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS names (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        name VARCHAR(255) NOT NULL
-      );
-    `);
-    res.send("Database and Table Initialized");
-  } catch (err) {
-    res.status(500).send({ error: err.message });
+    // 等待数据库同步
+    await sequelize.sync({ force: true });  // 添加这行
+    console.log('数据库表同步成功');
+    
+    app.listen(PORT, () => {
+      console.log(`服务器运行在 http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('无法启动服务器:', error);
+    process.exit(1);
   }
-});
+};
 
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
-});
+startServer();

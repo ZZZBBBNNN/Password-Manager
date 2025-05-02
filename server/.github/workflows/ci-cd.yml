@@ -1,0 +1,191 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  DOCKER_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_NAME: auth-server
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Lint code
+        run: npm run lint
+      
+      - name: Run tests
+        run: npm test
+        env:
+          JWT_SECRET: test_jwt_secret
+          ENCRYPTION_KEY: test_encryption_key_32chars_neede
+      
+      - name: Run security scan
+        run: npm audit
+
+  build:
+    name: Build and Push Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Calculate image tags
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+            type=ref,event=branch
+            latest
+      
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name staging-cluster --region us-east-1
+      
+      - name: Update Kubernetes deployment
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+          BASE64_DB_URL: ${{ secrets.BASE64_DB_URL }}
+          BASE64_REDIS_URL: ${{ secrets.BASE64_REDIS_URL }}
+          BASE64_JWT_SECRET: ${{ secrets.BASE64_JWT_SECRET }}
+          BASE64_ENCRYPTION_KEY: ${{ secrets.BASE64_ENCRYPTION_KEY }}
+        run: |
+          # Replace environment variables in Kubernetes manifests
+          envsubst < k8s/deployment.yaml > k8s/deployment-rendered.yaml
+          envsubst < k8s/secrets.yaml > k8s/secrets-rendered.yaml
+          
+          # Apply Kubernetes manifests
+          kubectl apply -f k8s/secrets-rendered.yaml
+          kubectl apply -f k8s/deployment-rendered.yaml
+          
+          # Wait for deployment to complete
+          kubectl rollout status deployment/auth-server -n staging
+      
+      - name: Run integration tests
+        run: |
+          STAGING_API_URL=$(kubectl get ingress auth-server-ingress -n staging -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          npm run test:integration -- --url=https://$STAGING_API_URL
+
+  deploy-production:
+    name: Deploy to Production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name production-cluster --region us-east-1
+      
+      - name: Update Kubernetes deployment
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+          BASE64_DB_URL: ${{ secrets.BASE64_DB_URL }}
+          BASE64_REDIS_URL: ${{ secrets.BASE64_REDIS_URL }}
+          BASE64_JWT_SECRET: ${{ secrets.BASE64_JWT_SECRET }}
+          BASE64_ENCRYPTION_KEY: ${{ secrets.BASE64_ENCRYPTION_KEY }}
+        run: |
+          # Replace environment variables in Kubernetes manifests
+          envsubst < k8s/deployment.yaml > k8s/deployment-rendered.yaml
+          envsubst < k8s/secrets.yaml > k8s/secrets-rendered.yaml
+          
+          # Apply Kubernetes manifests
+          kubectl apply -f k8s/secrets-rendered.yaml
+          kubectl apply -f k8s/deployment-rendered.yaml
+          
+          # Wait for deployment to complete
+          kubectl rollout status deployment/auth-server -n production
+      
+      - name: Notify deployment success
+        uses: slackapi/slack-github-action@v1.24.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": " Auth Server deployed to production successfully: https://api.example.com"
+            }
