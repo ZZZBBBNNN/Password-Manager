@@ -1,11 +1,11 @@
 # version: '3.8'
-
+#根据说明书运行docker容器中的某些镜像
 services:
-  app:
-    build: .
+  app:  # 可以自定义服务名 我自己的服务器
+    build: . #使用自己写的dockerfile构建的镜像用build构建 用于运行自己的服务器
     ports:
-      - "3000:3000"
-    environment:
+      - "3000:3000" #把Dockerfile中开放的端口做 端口映射
+    environment: #构建环境
       - DB_HOST=db
       - DB_USER=postgres
       - DB_PASSWORD=postgres
@@ -34,7 +34,7 @@ services:
   db:
     image: postgres:14
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER: postgres #替换镜像内部的环境变量值
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: auth_db
     ports:

@@ -22,6 +22,10 @@ import sequelize from './database.js';
 import User from './user.js';
 import Password from './password.js';
 
+// 建立模型关联
+Password.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(Password, { foreignKey: 'userId' });
+
 // 同步所有模型到数据库
 const syncDatabase = async () => {
   try {

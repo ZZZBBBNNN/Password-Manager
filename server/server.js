@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { sequelize } from './models/database.js';
+import sequelize from './models/database.js';
 import authRoutes from './routes/auth.js';
 import passwordRoutes from './routes/passwords.js';
 
@@ -37,7 +37,7 @@ const startServer = async () => {
     console.log('数据库连接成功');
 
     // 等待数据库同步
-    await sequelize.sync({ force: true });  // 添加这行
+    await sequelize.sync({ force: true }); 
     console.log('数据库表同步成功');
     
     app.listen(PORT, () => {
