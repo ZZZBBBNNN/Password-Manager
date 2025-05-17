@@ -1,4 +1,4 @@
-# Navigation Example
+# Password Manager
 
 <p>
   <!-- iOS -->
@@ -15,23 +15,83 @@
   </a>
 </p>
 
-## 🚀 How to use
 
-- Install packages with `yarn` or `npm install`.
-- Run `yarn start` or `npm run start` to start the bundler.
-- Open the project in a React runtime to try it:
-  - iOS: [Client iOS](https://itunes.apple.com/app/apple-store/id982107779)
-  - Android: [Client Android](https://play.google.com/store/apps/details?id=host.exp.exponent&referrer=blankexample)
-  - Web: Any web browser
-- When it's time to customize your runtime, refer to the ["Adding custom native code"](https://docs.expo.dev/workflow/customizing/) guide!
+# Project Setup Guide
 
-## Publishing
+This project includes a backend server powered by Docker and a frontend application built with Node.js.
 
-- Deploy the native app to the App store and Play store using this guide: [Deployment](https://docs.expo.dev/distribution/app-stores/).
-- Deploy the website using this guide: [Web deployment](https://docs.expo.dev/distribution/publishing-websites/).
+---
 
-## 📝 Notes
+## 📦 Server Setup
 
-- Learn more about [Universal React](https://docs.expo.dev/).
-- See what API and components are [available in the React runtimes](https://docs.expo.dev/versions/latest/).
-- Find out more about developing apps and websites: [Official guides](https://docs.expo.dev/guides/).
+1. Open a terminal and navigate to the `server` directory:
+
+    ```bash
+    cd server
+    ```
+
+2. Start the server:
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    Or start with rebuild:
+
+    ```bash
+    docker-compose up -d --build
+    ```
+
+3. View server logs:
+
+    ```bash
+    docker-compose logs app
+    ```
+
+    Or follow logs in real-time:
+
+    ```bash
+    docker-compose logs -f app
+    ```
+
+4. Test server health status:
+
+    ```bash
+    curl http://localhost:3000/health
+    ```
+
+5. Stop the server:
+
+    ```bash
+    docker-compose down
+    ```
+
+---
+
+## 💻 Frontend Setup
+
+1. Open another terminal and navigate to the `component` directory:
+
+    ```bash
+    cd component
+    ```
+
+2. Install dependencies:
+
+    ```bash
+    npm install
+    ```
+
+3. Start the frontend application:
+
+    ```bash
+    npm start
+    ```
+
+---
+
+## ✅ Requirements
+
+- Docker and Docker Compose installed
+- Node.js and npm installed
+
