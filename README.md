@@ -70,7 +70,7 @@ This project includes a backend server powered by Docker and a frontend applicat
 
 ## 💻 Frontend Setup
 
-1.change config.js
+1.change config.js:
     
     ```bash
     cmd check your ipaddress
