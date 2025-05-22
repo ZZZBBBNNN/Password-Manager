@@ -70,19 +70,27 @@ This project includes a backend server powered by Docker and a frontend applicat
 
 ## 💻 Frontend Setup
 
-1. Open another terminal and navigate to the `component` directory:
+1.change config.js
+    
+    ```bash
+    cmd check your ipaddress
+    cd component
+    change API_BASE_URL : 'http://192.168.0.234:3000',  
+    ```
+
+2. Open another terminal and navigate to the `component` directory:
 
     ```bash
     cd component
     ```
 
-2. Install dependencies:
+3. Install dependencies:
 
     ```bash
     npm install
     ```
 
-3. Start the frontend application:
+4. Start the frontend application:
 
     ```bash
     npm start
