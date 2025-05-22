@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -7,43 +7,47 @@ import {
   Alert,
   Platform,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker"; // RNCPicker
+import { Picker } from "@react-native-picker/picker";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedView } from "../components/Themed";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import moment from "moment";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function Settings() {
   const [passwords, setPasswords] = useState([]);
-  const [selectedPassword, setSelectedPassword] = useState(""); // SelectedPassword
+  const [selectedPassword, setSelectedPassword] = useState("");
   const [reminderDate, setReminderDate] = useState(new Date());
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [isPickerVisible, setPickerVisible] = useState(false); // Control Modal Picker
+  const [isPickerVisible, setPickerVisible] = useState(false);
 
-  // loadPasswords
-  useEffect(() => {
-    async function loadPasswords() {
-      try {
-        const storedPasswords = await AsyncStorage.getItem("passwords");
-        if (storedPasswords) {
-          setPasswords(JSON.parse(storedPasswords));
+  useFocusEffect(
+    useCallback(() => {
+      async function loadPasswords() {
+        try {
+          const storedPasswords = await AsyncStorage.getItem("passwords");
+          if (storedPasswords) {
+            const parsed = JSON.parse(storedPasswords);
+            setPasswords(parsed);
+            if (parsed.length > 0) {
+              setSelectedPassword(parsed[0].appName);
+            } else {
+              setSelectedPassword("");
+            }
+          } else {
+            setPasswords([]);
+            setSelectedPassword("");
+          }
+        } catch (error) {
+          console.error("Failed to load passwords:", error);
         }
-      } catch (error) {
-        console.error("Failed to load passwords:", error);
       }
-    }
-    loadPasswords();
-  }, []);
 
-  // Listen for passwords changes to ensure the Picker component has default values
-  useEffect(() => {
-    if (passwords.length > 0) {
-      setSelectedPassword(passwords[0].appName); // pick the first password
-    }
-  }, [passwords]);
+      loadPasswords();
+    }, [])
+  );
 
-  // Set notifications
   const scheduleNotification = async () => {
     if (!selectedPassword) {
       Alert.alert("Error", "Please select a password to set a reminder.");
@@ -70,7 +74,9 @@ export default function Settings() {
 
       Alert.alert(
         "Reminder Set",
-        `You will be reminded to change ${selectedPassword} on ${moment(reminderDate).format("YYYY-MM-DD HH:mm")}.`
+        `You will be reminded to change ${selectedPassword} on ${moment(reminderDate).format(
+          "YYYY-MM-DD HH:mm"
+        )}.`
       );
     } catch (error) {
       console.error("Failed to schedule notification:", error);
@@ -78,26 +84,21 @@ export default function Settings() {
     }
   };
 
-  // show datepicker
   const showDatePicker = () => setDatePickerVisibility(true);
   const hideDatePicker = () => setDatePickerVisibility(false);
 
-  // choose date
   const handleConfirm = (date) => {
     setReminderDate(date);
     hideDatePicker();
   };
 
-  // show/hide
   const togglePicker = () => setPickerVisible(!isPickerVisible);
 
   return (
     <ThemedView style={styles.container}>
-      {/* choose password */}
       <View style={[styles.row, styles.rowWithMargin]}>
         <Text style={styles.label}>Select Password</Text>
         <View style={styles.pickerContainer}>
-          {/* iOS use Modal Picker */}
           {Platform.OS === "ios" ? (
             <>
               <Button title={selectedPassword || "Please Select"} onPress={togglePicker} />
@@ -107,9 +108,9 @@ export default function Settings() {
                     selectedValue={selectedPassword}
                     onValueChange={(itemValue) => {
                       setSelectedPassword(itemValue);
-                      setPickerVisible(false); // close Modal after picking
+                      setPickerVisible(false);
                     }}
-                    style={styles.pickerIos} // Picker style for iOS
+                    style={styles.pickerIos}
                   >
                     {passwords.length === 0 ? (
                       <Picker.Item label="No passwords available" value="" />
@@ -123,11 +124,10 @@ export default function Settings() {
               )}
             </>
           ) : (
-            // Android Picker
             <Picker
               selectedValue={selectedPassword}
               onValueChange={(itemValue) => setSelectedPassword(itemValue)}
-              style={styles.picker} // Picker style for Android
+              style={styles.picker}
             >
               {passwords.length === 0 ? (
                 <Picker.Item label="No passwords available" value="" />
@@ -141,23 +141,20 @@ export default function Settings() {
         </View>
       </View>
 
-      {/* Datetime picker */}
       <View style={[styles.row, styles.rowWithMargin]}>
         <Text style={styles.label}>Reminder Date & Time</Text>
         <Button title="Pick Date & Time" onPress={showDatePicker} />
       </View>
 
-      {/* Datetime picker Modal */}
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="datetime"
         date={reminderDate}
         onConfirm={handleConfirm}
         onCancel={hideDatePicker}
-        minimumDate={new Date()} // Prevent selection of past dates
+        minimumDate={new Date()}
       />
 
-      {/* Set reminder button */}
       <Button title="Set Reminder" onPress={scheduleNotification} />
     </ThemedView>
   );
@@ -167,18 +164,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#F4F6F9" },
   row: {
     flexDirection: "row",
-    alignItems: "center", // Make sure the text and selection box are vertically centered
+    alignItems: "center",
   },
   rowWithMargin: {
-    marginBottom: 30, // Increase the spacing between lines
+    marginBottom: 30,
   },
   label: { fontSize: 18, color: "#000", flex: 1 },
   pickerContainer: {
     flex: 1,
-    justifyContent: "center", // Make sure the left and right sides are on the same level
+    justifyContent: "center",
   },
   picker: {
-    height: 50, // Make sure the Android Picker is tall enough to display content
+    height: 50,
     color: "#000",
   },
   modalPicker: {
@@ -192,7 +189,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   pickerIos: {
-    height: 100, // iOS Picker height slightly increased
+    height: 100,
     color: "#000",
   },
 });
