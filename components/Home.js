@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"; 
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -52,8 +52,61 @@ export default function Home() {
   };
 
   function generateStrongPassword() {
-    return Math.random().toString(36).slice(-10);
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const digits = "0123456789";
+    const symbols = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+    const all = upper + lower + digits + symbols;
+    let password = [
+      upper[Math.floor(Math.random() * upper.length)],
+      lower[Math.floor(Math.random() * lower.length)],
+      digits[Math.floor(Math.random() * digits.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+    ];
+    for (let i = 4; i < 12; i++) {
+      password.push(all[Math.floor(Math.random() * all.length)]);
+    }
+    return password.sort(() => Math.random() - 0.5).join("");
   }
+
+  // 密码强度评估函数
+  function getPasswordStrength(password) {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+
+    // 添加提示信息
+    let tips = [];
+    if (password.length < 8) tips.push("increase password length");
+    if (!/[A-Z]/.test(password)) tips.push("add uppercase letters");
+    if (!/[a-z]/.test(password)) tips.push("add lowercase letters");
+    if (!/[0-9]/.test(password)) tips.push("add numbers");
+    if (!/[^A-Za-z0-9]/.test(password)) tips.push("add special characters");
+    
+    return { 
+      level: strength <= 2 ? "weak" : strength <= 4 ? "medium" : "strong", 
+      color: strength <= 2 ? "#FF4D4D" : strength <= 4 ? "#FFD700" : "#28a745", 
+      width: strength <= 2 ? "33%" : strength <= 4 ? "66%" : "100%",
+      tips: tips.length > 0 ? tips.join(",") : ""
+    };
+  }
+
+  // 密码强度条渲染函数
+  const renderPasswordStrengthBar = (password) => {
+    const { level, color, width, tips } = getPasswordStrength(password);
+    return (
+      <View style={styles.strengthContainer}>
+        <View style={[styles.strengthBar, { backgroundColor: color, width }]} />
+        <View style={styles.strengthLabelContainer}>
+          <Text style={[styles.strengthLabel, { color }]}>{level}</Text>
+          {tips.length > 0 && <Text style={styles.strengthTips}>Suggestion: {tips}</Text>}
+        </View>
+      </View>
+    );
+  };
 
   const loadPasswords = async () => {
     setLoading(true);
@@ -102,24 +155,41 @@ export default function Home() {
 
   const addPassword = async () => {
     if (newAppName && newUsername && newPassword) {
-      try {
-        const response = await axios.post(`${config.API_BASE_URL}/passwords`, {
-          appName: newAppName,
-          username: newUsername,
-          password: newPassword
-        }, {
-          headers: {
-            'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
-          }
-        });
-        
-        setPasswords([...passwords, response.data]);
-        setNewAppName("");
-        setNewUsername("");
-        setNewPassword(generateStrongPassword());
-      } catch (error) {
-        Alert.alert("Error", error.message);
+      // 检查密码强度，如果弱则警告
+      const strength = getPasswordStrength(newPassword);
+      if (strength.level === "weak") {
+        Alert.alert(
+          "Weak password warning",
+          `You are using a weak password. ${strength.tips}`,
+          [
+            {text: "modify password", style: "cancel"},
+            {text: "still use", onPress: () => submitNewPassword()}
+          ]
+        );
+      } else {
+        submitNewPassword();
       }
+    }
+  };
+
+  const submitNewPassword = async () => {
+    try {
+      const response = await axios.post(`${config.API_BASE_URL}/passwords`, {
+        appName: newAppName,
+        username: newUsername,
+        password: newPassword
+      }, {
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`
+        }
+      });
+      
+      setPasswords([...passwords, response.data]);
+      setNewAppName("");
+      setNewUsername("");
+      setNewPassword(generateStrongPassword());
+    } catch (error) {
+      Alert.alert("Error", error.message);
     }
   };
 
@@ -145,121 +215,148 @@ export default function Home() {
     setEditingPassword((prev) => ({ ...prev, [id]: currentPassword }));
   };
 
-  // New function to handle website navigation and auto-fill
+  // 快速登录和自动填充功能
   const visitWebsite = async (website, username, password) => {
     try {
-      // Check if website has proper URL format
       let url = website;
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://' + url;
       }
       
-      // Copy credentials to clipboard for easy pasting
+      // 复制凭据到剪贴板 - 使用特殊格式便于解析
+      const credentials = `${username}\t${password}`;
       if (Platform.OS === 'web') {
         try {
-          await navigator.clipboard.writeText(`Username: ${username}\nPassword: ${password}`);
-          Alert.alert(
-            "Credentials Copied",
-            "Username and password copied to clipboard for easy pasting"
-          );
+          await navigator.clipboard.writeText(credentials);
+          
+          // 在Web环境中，可以尝试使用新窗口打开并注入辅助脚本
+          const newWindow = window.open(url, '_blank');
+          if (newWindow) {
+            // 提示用户使用快捷键粘贴
+            Alert.alert(
+              "快速登录准备就绪",
+              "用户名和密码已按顺序复制到剪贴板。你可以:\n\n" +
+              "1. 点击'确认'后，在新窗口中\n" +
+              "2. 点击用户名输入框\n" +
+              "3. 粘贴 (Ctrl/Cmd+V)\n" +
+              "4. 按Tab键自动移动到密码输入框",
+              [{ text: "确认", style: "default" }]
+            );
+          } else {
+            Alert.alert(
+              "弹窗被阻止",
+              "请允许弹窗并重试，或手动访问网站并粘贴凭据。",
+              [{ text: "手动打开", onPress: () => Linking.openURL(url) }]
+            );
+          }
         } catch (err) {
-          console.error("Failed to copy credentials:", err);
+          console.error("复制凭据失败:", err);
+          // 如果复制失败，回退到普通链接打开
+          Linking.openURL(url);
         }
-        
-        // Open website in new tab
-        window.open(url, '_blank');
       } else {
-        // For mobile platforms
-        const canOpen = await Linking.canOpenURL(url);
+        // 移动设备处理
+        await Clipboard.setString(credentials);
         
-        if (canOpen) {
-          await Linking.openURL(url);
-          // Copy to clipboard for mobile
-          await Clipboard.setString(`Username: ${username}\nPassword: ${password}`);
-          Alert.alert(
-            "Website Opened",
-            "Username and password copied to clipboard for easy pasting"
-          );
-        } else {
-          Alert.alert("Error", `Cannot open URL: ${url}`);
-        }
+        Alert.alert(
+          "快速登录准备就绪",
+          "用户名和密码已按顺序复制到剪贴板。你可以:\n\n" +
+          "1. 点击'确认'打开网站\n" +
+          "2. 点击用户名输入框\n" +
+          "3. 长按并选择粘贴\n" +
+          "4. 对密码输入框重复同样操作",
+          [{ text: "确认", onPress: () => Linking.openURL(url) }]
+        );
       }
     } catch (error) {
-      console.error("Error visiting website:", error);
-      Alert.alert("Error", "Failed to open website");
+      console.error("访问网站时出错:", error);
+      Alert.alert("错误", "准备网站登录失败");
     }
   };
-  
-  
-  const renderItem = ({ item }) => (
-    <View style={styles.passwordItem}>
-      <View style={styles.card}>
-        <Text style={styles.appName}>{item.appName}</Text>
-        {editingUsername[item.id] !== undefined ? (
-          <TextInput
-            style={styles.input}
-            value={editingUsername[item.id]}
-            onChangeText={(text) =>
-              setEditingUsername((prev) => ({ ...prev, [item.id]: text }))
-            }
-          />
-        ) : (
-          <Text style={styles.username}>User: {item.username}</Text>
-        )}
-        {editingPassword[item.id] !== undefined ? (
-          <TextInput
-            style={styles.input}
-            value={editingPassword[item.id]}
-            onChangeText={(text) =>
-              setEditingPassword((prev) => ({ ...prev, [item.id]: text }))
-            }
-          />
-        ) : (
-          <Text>{showPasswords[item.id] ? item.password : "*****"}</Text>
-        )}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => togglePasswordVisibility(item.id)}
-          >
-            <Text style={styles.buttonText}>
-              {showPasswords[item.id] ? "Hide" : "Show"}
-            </Text>
-          </TouchableOpacity>
+
+  const renderItem = ({ item }) => {
+    const currentPassword =
+      editingPassword[item.id] !== undefined
+        ? editingPassword[item.id]
+        : item.password;
+        
+    return (
+      <View style={styles.passwordItem}>
+        <View style={styles.card}>
+          <Text style={styles.appName}>{item.appName}</Text>
           
-          {/* New Visit & Auto-fill Button */}
-          <TouchableOpacity
-            style={[styles.button, {backgroundColor: '#4a6fa5'}]}
-            onPress={() => visitWebsite(item.appName, item.username, item.password)}
-          >
-            <Text style={styles.buttonText}>Visit & Auto-fill</Text>
-          </TouchableOpacity>
+          {editingUsername[item.id] !== undefined ? (
+            <TextInput
+              style={styles.input}
+              value={editingUsername[item.id]}
+              onChangeText={(text) =>
+                setEditingUsername((prev) => ({ ...prev, [item.id]: text }))
+              }
+            />
+          ) : (
+            <Text style={styles.username}>username: {item.username}</Text>
+          )}
           
           {editingPassword[item.id] !== undefined ? (
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => saveEditedPassword(item.id)}
-            >
-              <Text style={styles.buttonText}>Save</Text>
-            </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              value={editingPassword[item.id]}
+              onChangeText={(text) =>
+                setEditingPassword((prev) => ({ ...prev, [item.id]: text }))
+              }
+            />
           ) : (
+            <Text>{showPasswords[item.id] ? item.password : "*****"}</Text>
+          )}
+          
+          {/* 密码强度条显示 */}
+          {renderPasswordStrengthBar(currentPassword)}
+          
+          <View style={styles.actions}>
             <TouchableOpacity
               style={styles.button}
-              onPress={() => startEditing(item.id, item.username, item.password)}
+              onPress={() => togglePasswordVisibility(item.id)}
             >
-              <Text style={styles.buttonText}>Edit</Text>
+              <Text style={styles.buttonText}>
+                {showPasswords[item.id] ? "hide" : "show"}
+              </Text>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => deletePassword(item.id)}
-          >
-            <Text style={styles.deleteText}>Delete</Text>
-          </TouchableOpacity>
+            
+            {/* 快速登录按钮 */}
+            <TouchableOpacity
+              style={[styles.button, {backgroundColor: '#4a6fa5'}]}
+              onPress={() => visitWebsite(item.appName, item.username, item.password)}
+            >
+              <Text style={styles.buttonText}>quick login</Text>
+            </TouchableOpacity>
+            
+            {editingPassword[item.id] !== undefined ? (
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() => saveEditedPassword(item.id)}
+              >
+                <Text style={styles.buttonText}>save</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() => startEditing(item.id, item.username, item.password)}
+              >
+                <Text style={styles.buttonText}>edit</Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => deletePassword(item.id)}
+            >
+              <Text style={styles.deleteText}>delete</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
   
   return (
     <ThemedView style={styles.container}>
@@ -267,30 +364,40 @@ export default function Home() {
       {error && <Text style={styles.errorText}>{error}</Text>}
       <TextInput
         style={styles.searchBar}
-        placeholder="Search for app/website"
+        placeholder="search app/website"
         value={searchText}
         onChangeText={setSearchText}
       />
       <TextInput
         style={styles.input}
-        placeholder="Enter app/website name"
+        placeholder="input app/website name"
         value={newAppName}
         onChangeText={setNewAppName}
       />
       <TextInput
         style={styles.input}
-        placeholder="Enter username"
+        placeholder="input username"
         value={newUsername}
         onChangeText={setNewUsername}
       />
       <TextInput
         style={styles.input}
-        placeholder="Enter password"
+        placeholder="input password"
         value={newPassword}
         onChangeText={setNewPassword}
       />
+      <TouchableOpacity
+        style={styles.generateButton}
+        onPress={() => setNewPassword(generateStrongPassword())}
+      >
+        <Text style={styles.generateText}>generate strong password</Text>
+      </TouchableOpacity>
+      
+      {/* 新密码的密码强度显示 */}
+      {newPassword.length > 0 && renderPasswordStrengthBar(newPassword)}
+      
       <TouchableOpacity style={styles.addButton} onPress={addPassword}>
-        <Text style={styles.addButtonText}>Add New Password</Text>
+        <Text style={styles.addButtonText}>add new password</Text>
       </TouchableOpacity>
 
       <FlatList
@@ -377,4 +484,37 @@ const styles = StyleSheet.create({
     textAlign: "center", 
     fontWeight: "bold" 
   },
+  generateButton: {
+    backgroundColor: "#6c757d",
+    padding: 8,
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  generateText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+  // 密码强度相关样式
+  strengthContainer: {
+    marginTop: 5,
+    marginBottom: 10,
+  },
+  strengthBar: {
+    height: 6,
+    borderRadius: 3,
+  },
+  strengthLabel: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  strengthLabelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2
+  },
+  strengthTips: {
+    fontSize: 11,
+    color: '#666',
+    flex: 1,
+    textAlign: 'right'
+  }
 });
