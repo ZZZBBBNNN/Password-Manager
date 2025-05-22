@@ -14,9 +14,8 @@ const db = mysql.createPool({
   database: 'test_db',
 });
 
-// 接收前端 GET 请求
 app.get('/', async (req, res) => {
-  const name = req.query.Name; // 获取查询参数
+  const name = req.query.Name;
   if (!name) {
     return res.status(400).send("Name 参数缺失");
   }
@@ -29,7 +28,6 @@ app.get('/', async (req, res) => {
   }
 });
 
-// 创建数据库和表
 app.get('/init', async (req, res) => {
   try {
     await db.query(`

@@ -54,22 +54,32 @@ export default function Settings() {
       return;
     }
 
-    const trigger = new Date(reminderDate);
-    trigger.setSeconds(0);
+    const now = new Date();
+    const selectedTime = new Date(reminderDate);
+    selectedTime.setSeconds(0);
 
-    if (trigger <= new Date()) {
+    if (selectedTime <= now) {
       Alert.alert("Error", "Selected time must be in the future.");
       return;
     }
 
     try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permission Denied", "Notification permission not granted.");
+        return;
+      }
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "Password Change Reminder",
           body: `It's time to change the password for ${selectedPassword}!`,
           sound: true,
         },
-        trigger,
+        trigger: {
+          type: "date",
+          date: selectedTime,
+        },
       });
 
       Alert.alert(
@@ -83,6 +93,15 @@ export default function Settings() {
       Alert.alert("Error", "Failed to set reminder.");
     }
   };
+
+  Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+  });
+
 
   const showDatePicker = () => setDatePickerVisibility(true);
   const hideDatePicker = () => setDatePickerVisibility(false);
