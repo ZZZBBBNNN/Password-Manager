@@ -1,0 +1,54 @@
+# version: '3.8'
+#根据说明书运行docker容器中的某些镜像
+services:
+  app:  # 可以自定义服务名 我自己的服务器
+    build: . #使用自己写的dockerfile构建的镜像用build构建 用于运行自己的服务器
+    ports:
+      - "3000:3000" #把Dockerfile中开放的端口做 端口映射
+    environment: #构建环境
+      - DB_HOST=db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=auth_db
+      - DB_PORT=5432
+      - JWT_SECRET=your_jwt_secret_key
+      - NODE_ENV=development
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+      - /app/node_modules
+  # postgres:
+  #   image: postgres:14
+  #   environment:
+  #     POSTGRES_USER: ${DB_USER}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #     POSTGRES_DB: ${DB_NAME}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres #替换镜像内部的环境变量值
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:6
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
