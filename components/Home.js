@@ -7,15 +7,16 @@ import {
   TouchableOpacity,
   Text,
   ActivityIndicator,
-  Alert
+  Alert,
+  Linking,
+  Clipboard,
+  Platform
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedView } from "./Themed";
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import config from './config'; 
-
-
 
 export default function Home() {
   const [searchText, setSearchText] = useState("");
@@ -43,8 +44,8 @@ export default function Home() {
         navigation.replace('Login');
       }
     } catch (error) {
-      console.error('认证检查失败:', error);
-      Alert.alert('错误', '认证检查失败');
+      console.error('Authentication check failed:', error);
+      Alert.alert('Error', 'Authentication check failed');
     } finally {
       setIsLoading(false);
     }
@@ -54,29 +55,13 @@ export default function Home() {
     return Math.random().toString(36).slice(-10);
   }
 
-  // const loadPasswords = async () => {
-  //   try {
-  //     const response = await axios.get('http://localhost:3000?Name=AAA');
-  //     console.log(response.data.message);
-  //   } catch (error) {
-  //     Alert.alert("Error", error.message);
-  //   }
-  //   // try {
-  //   //   const storedPasswords = await AsyncStorage.getItem("passwords");
-  //   //   if (storedPasswords) {
-  //   //     setPasswords(JSON.parse(storedPasswords));
-  //   //   }
-  //   // } catch (error) {
-  //   //   console.error("Error loading passwords:", error);
-  //   // }
-  // };
   const loadPasswords = async () => {
     setLoading(true);
     setError(null);
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        throw new Error('未登录');
+        throw new Error('Not logged in');
       }
       
       const response = await axios.get(`${config.API_BASE_URL}/passwords`, {
@@ -87,7 +72,7 @@ export default function Home() {
       setPasswords(response.data);
     } catch (error) {
       setError(error.message);
-      Alert.alert("错误", error.message);
+      Alert.alert("Error", error.message);
     } finally {
       setLoading(false);
     }
@@ -160,25 +145,52 @@ export default function Home() {
     setEditingPassword((prev) => ({ ...prev, [id]: currentPassword }));
   };
 
-  // const saveEditedPassword = (id) => {
-  //   const updatedPasswords = passwords.map((item) =>
-  //     item.id === id
-  //       ? { ...item, username: editingUsername[id], password: editingPassword[id] }
-  //       : item
-  //   );
-  //   savePasswords(updatedPasswords);
-  //   setEditingUsername((prev) => {
-  //     const updated = { ...prev };
-  //     delete updated[id];
-  //     return updated;
-  //   });
-  //   setEditingPassword((prev) => {
-  //     const updated = { ...prev };
-  //     delete updated[id];
-  //     return updated;
-  //   });
-  // };
-
+  // New function to handle website navigation and auto-fill
+  const visitWebsite = async (website, username, password) => {
+    try {
+      // Check if website has proper URL format
+      let url = website;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      
+      // Copy credentials to clipboard for easy pasting
+      if (Platform.OS === 'web') {
+        try {
+          await navigator.clipboard.writeText(`Username: ${username}\nPassword: ${password}`);
+          Alert.alert(
+            "Credentials Copied",
+            "Username and password copied to clipboard for easy pasting"
+          );
+        } catch (err) {
+          console.error("Failed to copy credentials:", err);
+        }
+        
+        // Open website in new tab
+        window.open(url, '_blank');
+      } else {
+        // For mobile platforms
+        const canOpen = await Linking.canOpenURL(url);
+        
+        if (canOpen) {
+          await Linking.openURL(url);
+          // Copy to clipboard for mobile
+          await Clipboard.setString(`Username: ${username}\nPassword: ${password}`);
+          Alert.alert(
+            "Website Opened",
+            "Username and password copied to clipboard for easy pasting"
+          );
+        } else {
+          Alert.alert("Error", `Cannot open URL: ${url}`);
+        }
+      }
+    } catch (error) {
+      console.error("Error visiting website:", error);
+      Alert.alert("Error", "Failed to open website");
+    }
+  };
+  
+  
   const renderItem = ({ item }) => (
     <View style={styles.passwordItem}>
       <View style={styles.card}>
@@ -214,6 +226,15 @@ export default function Home() {
               {showPasswords[item.id] ? "Hide" : "Show"}
             </Text>
           </TouchableOpacity>
+          
+          {/* New Visit & Auto-fill Button */}
+          <TouchableOpacity
+            style={[styles.button, {backgroundColor: '#4a6fa5'}]}
+            onPress={() => visitWebsite(item.appName, item.username, item.password)}
+          >
+            <Text style={styles.buttonText}>Visit & Auto-fill</Text>
+          </TouchableOpacity>
+          
           {editingPassword[item.id] !== undefined ? (
             <TouchableOpacity
               style={styles.button}
@@ -239,6 +260,7 @@ export default function Home() {
       </View>
     </View>
   );
+  
   return (
     <ThemedView style={styles.container}>
       {loading && <ActivityIndicator size="large" color="#0000ff" />}
@@ -280,7 +302,6 @@ export default function Home() {
         style={{ marginTop: 20 }}
       />
     </ThemedView>
- 
   );
 }
 
@@ -309,14 +330,51 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 10
   },
-  card: { padding: 15, backgroundColor: "#fff", borderRadius: 8 , boxShadow: '0 2px 4px rgba(0,0,0,0.1)'},
+  passwordItem: {
+    marginBottom: 15,
+  },
+  card: { 
+    padding: 15, 
+    backgroundColor: "#fff", 
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
+  },
   appName: { fontWeight: "bold", fontSize: 16, marginBottom: 5 },
   username: { fontSize: 14, marginBottom: 5 },
-  actions: { marginTop: 10, flexDirection: "row", justifyContent: "space-between" },
-  button: { backgroundColor: "#007BFF", padding: 8, borderRadius: 5 },
+  actions: { 
+    marginTop: 10, 
+    flexDirection: "row", 
+    justifyContent: "space-between",
+    flexWrap: "wrap"
+  },
+  button: { 
+    backgroundColor: "#007BFF", 
+    padding: 8, 
+    borderRadius: 5,
+    marginRight: 5,
+    marginBottom: 5
+  },
   buttonText: { color: "#fff", fontWeight: "bold" },
-  deleteButton: { backgroundColor: "#FF4D4D", padding: 8, borderRadius: 5 },
+  deleteButton: { 
+    backgroundColor: "#FF4D4D", 
+    padding: 8, 
+    borderRadius: 5,
+    marginBottom: 5
+  },
   deleteText: { color: "#fff", fontWeight: "bold" },
-  addButton: { backgroundColor: "#28a745", padding: 10, borderRadius: 5, marginTop: 10 },
-  addButtonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+  addButton: { 
+    backgroundColor: "#28a745", 
+    padding: 10, 
+    borderRadius: 5, 
+    marginTop: 10 
+  },
+  addButtonText: { 
+    color: "#fff", 
+    textAlign: "center", 
+    fontWeight: "bold" 
+  },
 });

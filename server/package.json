@@ -19,6 +19,7 @@
     "jsonwebtoken": "^9.0.0",
     "pg": "^8.10.0",
     "redis": "^4.6.5",
+    "selenium-webdriver": "^4.32.0",
     "sequelize": "^6.31.0",
     "speakeasy": "^2.0.0"
   },
